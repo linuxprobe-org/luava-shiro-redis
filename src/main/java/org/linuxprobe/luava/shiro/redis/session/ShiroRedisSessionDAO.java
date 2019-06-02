@@ -1,6 +1,7 @@
 package org.linuxprobe.luava.shiro.redis.session;
 
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -11,11 +12,14 @@ import org.apache.shiro.session.mgt.eis.AbstractSessionDAO;
 import org.linuxprobe.luava.cache.impl.RedisCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.serializer.JdkSerializationRedisSerializer;
 
 public class ShiroRedisSessionDAO extends AbstractSessionDAO {
 	private static Logger logger = LoggerFactory.getLogger(ShiroRedisSessionDAO.class);
 
 	private static final String sessionKeyPrefix = "shiro:session:";
+
+	private static final JdkSerializationRedisSerializer serializer = new JdkSerializationRedisSerializer();
 
 	private RedisCache redisCache;
 
@@ -92,7 +96,17 @@ public class ShiroRedisSessionDAO extends AbstractSessionDAO {
 	 * @return
 	 */
 	private String getKey(Serializable sessionId) {
-		String preKey = sessionKeyPrefix + sessionId;
-		return preKey;
+		String newKey = null;
+		try {
+			if (sessionId instanceof String || sessionId instanceof Number || sessionId instanceof Character
+					|| sessionId instanceof Boolean) {
+				newKey = sessionKeyPrefix + sessionId;
+			} else {
+				newKey = sessionKeyPrefix + new String(serializer.serialize(sessionId), "UTF-8");
+			}
+		} catch (UnsupportedEncodingException e) {
+			throw new IllegalArgumentException(e);
+		}
+		return newKey;
 	}
 }

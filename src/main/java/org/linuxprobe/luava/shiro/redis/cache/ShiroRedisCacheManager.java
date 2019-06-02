@@ -32,7 +32,7 @@ public class ShiroRedisCacheManager implements CacheManager {
 	@SuppressWarnings("unchecked")
 	@Override
 	public Cache<Serializable, Serializable> getCache(String name) throws CacheException {
-		logger.debug("获取名称为: " + name + " 的RedisCache实例");
+		logger.debug("获取名称为:{} 的ShiroRedisCache实例", name);
 		Cache<Serializable, Serializable> c = this.caches.get(name);
 		if (c == null) {
 			c = new ShiroRedisCache(this.redisCache, name);

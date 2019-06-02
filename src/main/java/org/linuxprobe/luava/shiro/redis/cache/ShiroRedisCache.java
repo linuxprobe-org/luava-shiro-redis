@@ -23,7 +23,7 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
 	 * redis操作类
 	 */
 	private RedisCache redisCache;
-	private JdkSerializationRedisSerializer serializer = new JdkSerializationRedisSerializer();
+	private static final JdkSerializationRedisSerializer serializer = new JdkSerializationRedisSerializer();
 
 	/**
 	 * @param redisCache redis缓存
@@ -150,7 +150,7 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
 			if (key instanceof String || key instanceof Number || key instanceof Character || key instanceof Boolean) {
 				newKey = this.keyPrefix + key;
 			} else {
-				newKey = this.keyPrefix + new String(this.serializer.serialize(key), "UTF-8");
+				newKey = this.keyPrefix + new String(serializer.serialize(key), "UTF-8");
 			}
 		} catch (UnsupportedEncodingException e) {
 			throw new IllegalArgumentException(e);
