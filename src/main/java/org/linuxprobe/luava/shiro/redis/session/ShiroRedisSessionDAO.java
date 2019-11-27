@@ -6,6 +6,7 @@ import org.apache.shiro.session.mgt.eis.AbstractSessionDAO;
 import org.linuxprobe.luava.cache.impl.redis.RedisCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.serializer.JdkSerializationRedisSerializer;
 
 import java.io.Serializable;
 import java.util.Collection;
