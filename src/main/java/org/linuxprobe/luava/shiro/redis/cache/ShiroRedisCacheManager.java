@@ -16,14 +16,22 @@ public class ShiroRedisCacheManager implements CacheManager {
     private static final Logger logger = LoggerFactory.getLogger(ShiroRedisCacheManager.class);
 
     private final ConcurrentMap<String, Cache<Serializable, Serializable>> caches = new ConcurrentHashMap<>();
-
+    /**
+     * 缓存超时时间, 单位秒
+     */
+    private long cacheTimeout;
     /**
      * redis操作类
      */
     private RedisCache redisCache;
 
     public ShiroRedisCacheManager(RedisCache redisCache) {
+        this(redisCache, 0);
+    }
+
+    public ShiroRedisCacheManager(RedisCache redisCache, long cacheTimeout) {
         this.redisCache = redisCache;
+        this.cacheTimeout = cacheTimeout;
     }
 
     /**
@@ -35,7 +43,7 @@ public class ShiroRedisCacheManager implements CacheManager {
         ShiroRedisCacheManager.logger.debug("获取名称为: " + name + " 的RedisCache实例");
         Cache<Serializable, Serializable> c = this.caches.get(name);
         if (c == null) {
-            c = new ShiroRedisCache(this.redisCache, name);
+            c = new ShiroRedisCache(this.redisCache, name, this.cacheTimeout);
             this.caches.put(name, c);
         }
         return c;

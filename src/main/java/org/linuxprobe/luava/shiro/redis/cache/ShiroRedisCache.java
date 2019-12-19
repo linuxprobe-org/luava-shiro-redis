@@ -14,7 +14,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class ShiroRedisCache implements Cache<Serializable, Serializable> {
-    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    private static final Logger logger = LoggerFactory.getLogger(ShiroRedisCache.class);
     /**
      * key前缀
      */
@@ -24,20 +24,26 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     private RedisCache redisCache;
     private JdkSerializationRedisSerializer serializer = new JdkSerializationRedisSerializer();
+    /**
+     * 缓存超时时间, 单位秒
+     */
+    private long timeout;
 
     /**
      * @param redisCache redis缓存
      * @param name       缓存名称
+     * @param timeout    缓存超时时间, 单位秒
      */
-    public ShiroRedisCache(RedisCache redisCache, String name) {
+    public ShiroRedisCache(RedisCache redisCache, String name, long timeout) {
         if (redisCache == null) {
             throw new NullPointerException("redisCache can't be null");
         }
         this.redisCache = redisCache;
         this.keyPrefix = this.keyPrefix + name + ":";
-        if (this.logger.isTraceEnabled()) {
-            this.logger.trace("create shiro redis cache, keyPrefix is '{}'", this.keyPrefix);
+        if (ShiroRedisCache.logger.isTraceEnabled()) {
+            ShiroRedisCache.logger.trace("create shiro redis cache, keyPrefix is '{}'", this.keyPrefix);
         }
+        this.timeout = timeout;
     }
 
     /**
@@ -63,12 +69,8 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
     @Override
     public Serializable put(Serializable key, Serializable value) throws CacheException {
         key = this.keyAddPrefix(key);
-        try {
-            this.redisCache.set(key, value);
-            return value;
-        } catch (Throwable t) {
-            throw new CacheException(t);
-        }
+        this.redisCache.set(key, value, this.timeout);
+        return value;
     }
 
     /**
