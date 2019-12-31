@@ -17,7 +17,7 @@ public class ShiroRedisCacheManager implements CacheManager {
 
     private final ConcurrentMap<String, Cache<Serializable, Serializable>> caches = new ConcurrentHashMap<>();
     /**
-     * 缓存超时时间, 单位秒
+     * 缓存超时时间, 单位毫秒
      */
     private long cacheTimeout;
     /**

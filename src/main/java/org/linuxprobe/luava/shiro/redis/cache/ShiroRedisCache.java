@@ -12,6 +12,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class ShiroRedisCache implements Cache<Serializable, Serializable> {
     private static final Logger logger = LoggerFactory.getLogger(ShiroRedisCache.class);
@@ -25,14 +26,16 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
     private RedisCache redisCache;
     private JdkSerializationRedisSerializer serializer = new JdkSerializationRedisSerializer();
     /**
-     * 缓存超时时间, 单位秒
+     * 缓存超时时间, 单位毫秒
      */
     private long timeout;
+
+    private ShiroGuavaCache<Serializable, Serializable> guavaCache;
 
     /**
      * @param redisCache redis缓存
      * @param name       缓存名称
-     * @param timeout    缓存超时时间, 单位秒
+     * @param timeout    缓存超时时间, 单位毫秒
      */
     public ShiroRedisCache(RedisCache redisCache, String name, long timeout) {
         if (redisCache == null) {
@@ -44,6 +47,7 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
             ShiroRedisCache.logger.trace("create shiro redis cache, keyPrefix is '{}'", this.keyPrefix);
         }
         this.timeout = timeout;
+        this.guavaCache = new ShiroGuavaCache<>(timeout);
     }
 
     /**
@@ -51,16 +55,24 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public Serializable get(Serializable key) throws CacheException {
-        key = this.keyAddPrefix(key);
-        try {
-            if (key == null) {
-                return null;
-            } else {
-                return this.redisCache.get(key);
-            }
-        } catch (Throwable t) {
-            throw new CacheException(t);
+        if (key == null) {
+            return null;
         }
+        Serializable value = this.guavaCache.get(key);
+        if (value == null) {
+            Serializable oldKey = key;
+            key = this.keyAddPrefix(key);
+            try {
+                value = this.redisCache.get(key);
+                if (value != null) {
+                    this.guavaCache.put(oldKey, value);
+                }
+                return value;
+            } catch (Throwable t) {
+                throw new CacheException(t);
+            }
+        }
+        return value;
     }
 
     /**
@@ -68,8 +80,12 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public Serializable put(Serializable key, Serializable value) throws CacheException {
-        key = this.keyAddPrefix(key);
-        this.redisCache.set(key, value, this.timeout);
+        this.guavaCache.put(key, value);
+        // 每8秒同步一次到redis
+        if (System.currentTimeMillis() % 8000 == 0) {
+            key = this.keyAddPrefix(key);
+            this.redisCache.set(key, value, this.timeout, TimeUnit.MILLISECONDS);
+        }
         return value;
     }
 
@@ -78,6 +94,7 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public Serializable remove(Serializable key) throws CacheException {
+        this.guavaCache.remove(key);
         key = this.keyAddPrefix(key);
         try {
             Serializable value = this.redisCache.get(key);
@@ -93,6 +110,7 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public void clear() throws CacheException {
+        this.guavaCache.clear();
         try {
             Set<String> keys = this.redisCache.scan(this.keyPrefix + "*");
             this.redisCache.delete(keys);
@@ -106,11 +124,15 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public int size() {
-        try {
-            return this.redisCache.scan(this.keyPrefix + "*").size();
-        } catch (Throwable t) {
-            throw new CacheException(t);
+        int size = this.guavaCache.size();
+        if (size == 0) {
+            try {
+                return this.redisCache.scan(this.keyPrefix + "*").size();
+            } catch (Throwable t) {
+                throw new CacheException(t);
+            }
         }
+        return 0;
     }
 
     /**
@@ -118,15 +140,19 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public Set<Serializable> keys() {
-        try {
-            Set<String> allKeys = this.redisCache.scan(this.keyPrefix + "*");
-            for (Serializable key : allKeys) {
-                key.toString().substring(this.keyPrefix.length());
+        Set<Serializable> keys = this.guavaCache.keys();
+        if (keys == null || keys.isEmpty()) {
+            try {
+                Set<String> allKeys = this.redisCache.scan(this.keyPrefix + "*");
+                for (Serializable key : allKeys) {
+                    key.toString().substring(this.keyPrefix.length());
+                }
+                return (Set<Serializable>) (Set<?>) allKeys;
+            } catch (Throwable t) {
+                throw new CacheException(t);
             }
-            return (Set<Serializable>) (Set<?>) allKeys;
-        } catch (Throwable t) {
-            throw new CacheException(t);
         }
+        return keys;
     }
 
     /**
@@ -134,16 +160,20 @@ public class ShiroRedisCache implements Cache<Serializable, Serializable> {
      */
     @Override
     public Collection<Serializable> values() {
-        try {
-            Collection<Serializable> allvalues = new HashSet<>();
-            Set<Serializable> keys = this.keys();
-            for (Serializable key : keys) {
-                allvalues.add(this.get(key));
+        Collection<Serializable> values = this.guavaCache.values();
+        if (values == null || values.isEmpty()) {
+            try {
+                Collection<Serializable> allvalues = new HashSet<>();
+                Set<Serializable> keys = this.keys();
+                for (Serializable key : keys) {
+                    allvalues.add(this.get(key));
+                }
+                return allvalues;
+            } catch (Throwable t) {
+                throw new CacheException(t);
             }
-            return allvalues;
-        } catch (Throwable t) {
-            throw new CacheException(t);
         }
+        return values;
     }
 
     private String keyAddPrefix(Serializable key) {
